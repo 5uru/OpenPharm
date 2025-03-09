@@ -36,9 +36,9 @@ for i in range(1, 356):
         # add on txt file
         with open("ethnopharmacologia_links.txt", "a") as file:
             for link in links:
-                file.write(link["href"] + "\n")"""
-
-"""# Read article links
+                file.write(link["href"] + "\n")
+                
+# Read article links
 articles_links = []
 with open("ethnopharmacologia_links.txt", "r") as file:
     articles_links.extend(line.strip() for line in file)
