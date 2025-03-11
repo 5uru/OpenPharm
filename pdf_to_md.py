@@ -5,6 +5,10 @@ import json
 from mistralai import DocumentURLChunk, ImageURLChunk, TextChunk
 from tqdm import tqdm
 from dotenv import load_dotenv
+import sqlalchemy as sa
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -14,9 +18,55 @@ api_key = os.getenv("MISTRAL_API_KEY")
 client = Mistral(api_key=api_key)
 
 
-# Create a csv file with the following columns: file_name, text, link
-with open("data.csv", "w") as file:
-    file.write("file_name, text, link\n")
+# Create a sqlite database file with the following columns: file_name, text, link
+# Define the base class for SQLAlchemy models
+Base = declarative_base()
+
+# Define the Document model
+class Document(Base):
+    __tablename__ = 'documents'
+
+    id = sa.Column(sa.Integer, primary_key=True)
+    file_name = sa.Column(sa.String, nullable=False)
+    text = sa.Column(sa.Text)
+    link = sa.Column(sa.String)
+
+    def __repr__(self):
+        return f"<Document(file_name='{self.file_name}')>"
+
+# Create the database file
+def create_database(db_path='documents.db'):
+    # Create database directory if it doesn't exist
+    db_dir = Path(db_path).parent
+    if not db_dir.exists():
+        db_dir.mkdir(parents=True)
+
+    # Create SQLite engine
+    engine = sa.create_engine(f'sqlite:///{db_path}')
+
+    # Create tables
+    Base.metadata.create_all(engine)
+
+    # Create session factory
+    Session = sessionmaker(bind=engine)
+
+    return engine, Session
+
+# Initialize the database
+engine, Session = create_database()
+
+def save_document(file_name, text, link):
+    session = Session()
+    try:
+        document = Document(file_name=file_name, text=text, link=link)
+        session.add(document)
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(f"Database error: {str(e)}")
+    finally:
+        session.close()
+
 
 # all links on ethnopharmacologia_pdf_links.txt
 pdf_links = []
@@ -47,9 +97,8 @@ for pdf_file in tqdm(pdf_files):
 
         response_dict = json.loads(pdf_response.model_dump_json())
         json_string = json.dumps(response_dict, indent=4)
-        # save on csv file
-        with open("data.csv", "a") as file:
-            file.write(f"{pdf_file.stem}, {json_string}, {link}\n")
+        # Add to a sqlite database
+        save_document(file_name=pdf_file.stem, text=json_string, link=link)
     except Exception as e:
         print(f"Error processing {pdf_file}: {str(e)}")
 
